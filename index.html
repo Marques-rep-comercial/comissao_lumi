@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRM - Relatório de Comissões</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .table-sortable th {
+            cursor: pointer;
+        }
+        .table-sortable th:hover {
+            background-color: #374151; /* gray-700 */
+        }
+        .sort-icon {
+            display: inline-block;
+            width: 0;
+            height: 0;
+            margin-left: 5px;
+            vertical-align: middle;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+        }
+        .sort-asc .sort-icon {
+            border-bottom: 5px solid white;
+        }
+        .sort-desc .sort-icon {
+            border-top: 5px solid white;
+        }
+         #pdfUploadInput {
+            display: none;
+        }
+        .status-btn {
+            transition: all 0.2s ease-in-out;
+        }
+        .status-btn:hover {
+            transform: scale(1.05);
+            filter: brightness(1.1);
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200">
+
+    <div class="container mx-auto p-4 sm:p-6 lg:p-8">
+        <!-- Cabeçalho -->
+        <header class="mb-8 text-center">
+            <h1 class="text-3xl font-bold text-white">Lumiline</h1>
+            <h2 class="text-xl font-semibold text-gray-400">Relatório de Comissões</h2>
+            <p class="text-gray-500" id="reportHeader">Vendedor(a): MARCIO MARQUES</p>
+        </header>
+
+        <!-- Resumo -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
+            <div class="bg-gray-800 p-6 rounded-lg shadow-lg text-center">
+                <h3 class="text-lg font-semibold text-gray-400">Comissões Atrasadas</h3>
+                <p class="text-2xl font-bold text-red-400" id="comissoesAtrasadas">R$ 0,00</p>
+            </div>
+            <div class="bg-gray-800 p-6 rounded-lg shadow-lg text-center">
+                <h3 class="text-lg font-semibold text-gray-400">Comissões do Mês</h3>
+                <p class="text-2xl font-bold text-green-400" id="comissoesMes">R$ 0,00</p>
+            </div>
+            <div class="bg-gray-800 p-6 rounded-lg shadow-lg text-center">
+                <h3 class="text-lg font-semibold text-gray-400">Saldo Final</h3>
+                <p class="text-2xl font-bold text-blue-400" id="saldoFinal">R$ 0,00</p>
+            </div>
+        </div>
+
+        <!-- Previsão de Pagamentos Futuros -->
+        <div class="bg-gray-800 rounded-lg shadow-lg p-6 mb-8">
+            <h3 class="text-xl font-bold text-white mb-4">Previsão de Pagamentos Futuros</h3>
+            <p class="text-sm text-gray-400 mb-6">Com base nas datas de vencimento das comissões pendentes. O pagamento ocorre no dia 10 do mês seguinte ao vencimento.</p>
+            <div id="forecastContainer" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <!-- Cards de previsão serão inseridos aqui -->
+            </div>
+        </div>
+        
+        <!-- Botões de Ação -->
+        <div class="flex justify-end mb-4 gap-4 flex-wrap">
+            <button id="generatePdfBtn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-transform transform hover:scale-105">
+                Gerar PDF
+            </button>
+            <label for="pdfUploadInput" id="uploadButtonLabel" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-md transition-transform transform hover:scale-105 cursor-pointer">
+                Fazer Upload de PDF
+            </label>
+            <input type="file" id="pdfUploadInput" accept=".pdf" multiple>
+        </div>
+
+        <!-- Tabela de Comissões do Mês -->
+        <div class="bg-gray-800 rounded-lg shadow-lg overflow-hidden mb-8">
+            <h3 class="text-xl font-bold p-4 bg-gray-700/50 text-white" id="currentMonthTableTitle">Comissões do Mês</h3>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm table-sortable" id="tabelaComissoesMes">
+                    <thead class="bg-gray-700 text-gray-300 uppercase tracking-wider">
+                        <tr>
+                            <th class="p-3" data-sort="data">Data Vcto<span class="sort-icon"></span></th>
+                            <th class="p-3" data-sort="proposalNumber">Proposta/Pedido<span class="sort-icon"></span></th>
+                            <th class="p-3" data-sort="descricao">Descrição<span class="sort-icon"></span></th>
+                            <th class="p-3 text-right" data-sort="valor_parcela">Valor Parcela<span class="sort-icon"></span></th>
+                            <th class="p-3 text-right" data-sort="comissao_media">% Comissão<span class="sort-icon"></span></th>
+                            <th class="p-3 text-right" data-sort="valor_comissao">Valor Comissão<span class="sort-icon"></span></th>
+                            <th class="p-3 text-center" data-sort="status">Situação<span class="sort-icon"></span></th>
+                            <th class="p-3 text-center">Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody id="corpoTabelaMes" class="divide-y divide-gray-700"></tbody>
+                    <tfoot id="tfootTabelaMes"></tfoot>
+                </table>
+            </div>
+        </div>
+
+        <!-- Tabela de Comissões Pendentes -->
+        <div class="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+            <h3 class="text-xl font-bold p-4 bg-gray-700/50 text-white">Comissões Pendentes</h3>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm table-sortable" id="tabelaComissoesPendentes">
+                    <thead class="bg-gray-700 text-gray-300 uppercase tracking-wider">
+                        <tr>
+                            <th class="p-3" data-sort="data_vcto">Data Vcto<span class="sort-icon"></span></th>
+                            <th class="p-3" data-sort="proposalNumber">Proposta/Pedido<span class="sort-icon"></span></th>
+                            <th class="p-3" data-sort="descricao">Descrição<span class="sort-icon"></span></th>
+                            <th class="p-3 text-right" data-sort="valor_parcela">Valor Parcela<span class="sort-icon"></span></th>
+                            <th class="p-3 text-right" data-sort="comissao_media">% Comissão<span class="sort-icon"></span></th>
+                            <th class="p-3 text-right" data-sort="valor_comissao">Valor Comissão<span class="sort-icon"></span></th>
+                            <th class="p-3 text-center" data-sort="status">Situação<span class="sort-icon"></span></th>
+                            <th class="p-3 text-center">Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody id="corpoTabelaPendente" class="divide-y divide-gray-700"></tbody>
+                    <tfoot id="tfootTabelaPendente"></tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Confirmação de Exclusão -->
+    <div id="deleteConfirmationModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 items-center justify-center hidden">
+        <div class="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-sm mx-4">
+            <h3 class="text-lg font-bold text-white mb-4">Confirmar Exclusão</h3>
+            <p class="text-gray-300 mb-6">Você tem certeza que deseja excluir esta comissão? Esta ação não pode ser desfeita.</p>
+            <div class="flex justify-end gap-4">
+                <button id="cancelDeleteBtn" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg">Cancelar</button>
+                <button id="confirmDeleteBtn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">Excluir</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
+
+        // --- BASE DE DADOS ---
+        let comissoesMesData = [];
+        let comissoesPendentesData = [];
+        let commissionToDelete = { type: null, id: null };
+
+        // --- PERSISTÊNCIA DE DADOS ---
+        function saveData() {
+            localStorage.setItem('crmComissoesMes', JSON.stringify(comissoesMesData));
+            localStorage.setItem('crmComissoesPendentes', JSON.stringify(comissoesPendentesData));
+        }
+
+        function loadData() {
+            const savedMes = localStorage.getItem('crmComissoesMes');
+            const savedPendentes = localStorage.getItem('crmComissoesPendentes');
+
+            if (savedMes) comissoesMesData = JSON.parse(savedMes);
+            if (savedPendentes) comissoesPendentesData = JSON.parse(savedPendentes);
+        }
+
+        // --- FUNÇÕES AUXILIARES ---
+        const formatCurrency = (value) => value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+        // --- MODAL FUNCTIONS ---
+        function openDeleteModal(type, id) {
+            commissionToDelete = { type, id };
+            const modal = document.getElementById('deleteConfirmationModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeDeleteModal() {
+            const modal = document.getElementById('deleteConfirmationModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            commissionToDelete = { type: null, id: null };
+        }
+
+        function confirmDelete() {
+            const { type, id } = commissionToDelete;
+            if (type === 'mes') {
+                comissoesMesData = comissoesMesData.filter(c => c.id !== id);
+            } else if (type === 'pendente') {
+                comissoesPendentesData = comissoesPendentesData.filter(c => c.id !== id);
+            }
+            closeDeleteModal();
+            saveData();
+            renderTables();
+        }
+
+        // --- LÓGICA DE NEGÓCIO ---
+        function markAsReceived(commissionId) {
+            const index = comissoesPendentesData.findIndex(c => c.id === commissionId);
+            if (index === -1) return;
+
+            const [commission] = comissoesPendentesData.splice(index, 1);
+            
+            commission.status = 'Recebida';
+            commission.data = new Date().toISOString().split('T')[0];
+
+            comissoesMesData.push(commission);
+            saveData();
+            renderTables();
+        }
+
+        // --- RENDERIZAÇÃO E CÁLCULOS ---
+        function renderForecast() {
+            const forecastContainer = document.getElementById('forecastContainer');
+            const forecasts = {};
+            const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+            const hoje = new Date();
+            hoje.setHours(0, 0, 0, 0);
+
+            comissoesPendentesData.forEach(c => {
+                 const vctoDate = new Date(c.data_vcto + "T00:00:00");
+                 // Apenas prever comissões que ainda não estão atrasadas
+                 if (vctoDate >= hoje) {
+                    const monthYear = `${vctoDate.getMonth()}/${vctoDate.getFullYear()}`;
+                    if (!forecasts[monthYear]) {
+                        forecasts[monthYear] = 0;
+                    }
+                    forecasts[monthYear] += c.valor_comissao;
+                }
+            });
+            
+            forecastContainer.innerHTML = '';
+            const sortedMonths = Object.keys(forecasts).sort((a, b) => {
+                const [m1, y1] = a.split('/');
+                const [m2, y2] = b.split('/');
+                return new Date(y1, m1) - new Date(y2, m2);
+            });
+
+            sortedMonths.forEach(monthYear => {
+                const [month, year] = monthYear.split('/');
+                const paymentMonth = (parseInt(month) + 1) % 12;
+                const paymentYear = parseInt(month) === 11 ? parseInt(year) + 1 : parseInt(year);
+
+                const card = `
+                    <div class="bg-gray-700 p-4 rounded-lg text-center shadow">
+                        <h4 class="font-semibold text-white">Pagamento em ${monthNames[paymentMonth]} ${paymentYear}</h4>
+                        <p class="text-xs text-gray-400">(Ref. ${monthNames[parseInt(month)]})</p>
+                        <p class="text-2xl font-bold text-teal-400 mt-2">${formatCurrency(forecasts[monthYear])}</p>
+                    </div>
+                `;
+                forecastContainer.innerHTML += card;
+            });
+        }
+        
+        function renderTables() {
+            const corpoTabelaMes = document.getElementById('corpoTabelaMes');
+            const tfootTabelaMes = document.getElementById('tfootTabelaMes');
+            const corpoTabelaPendente = document.getElementById('corpoTabelaPendente');
+            const tfootTabelaPendente = document.getElementById('tfootTabelaPendente');
+            
+            const hoje = new Date();
+            const mesAtualNome = hoje.toLocaleString('pt-BR', { month: 'long' });
+            const anoAtual = hoje.getFullYear();
+            document.getElementById('currentMonthTableTitle').textContent = `Comissões do Mês (${mesAtualNome.charAt(0).toUpperCase() + mesAtualNome.slice(1)}/${anoAtual})`;
+            document.getElementById('reportHeader').textContent = `Relatório de ${mesAtualNome}/${anoAtual} - MARCIO MARQUES`;
+
+            // Tabela do Mês
+            corpoTabelaMes.innerHTML = '';
+            comissoesMesData.forEach(c => {
+                corpoTabelaMes.innerHTML += `
+                    <tr class="hover:bg-gray-700">
+                        <td class="p-3">${new Date(c.data + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
+                        <td class="p-3">${c.proposalNumber || 'N/A'}</td>
+                        <td class="p-3">${c.descricao}</td>
+                        <td class="p-3 text-right">${formatCurrency(c.valor_parcela)}</td>
+                        <td class="p-3 text-right">${c.comissao_media.toFixed(2)}%</td>
+                        <td class="p-3 text-right font-semibold text-green-400">${formatCurrency(c.valor_comissao)}</td>
+                        <td class="p-3 text-center">
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-200 text-green-800">Recebida</span>
+                        </td>
+                        <td class="p-3 text-center">
+                            <button onclick="openDeleteModal('mes', '${c.id}')" class="bg-red-600 hover:bg-red-700 text-white p-2 rounded-full text-xs">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-4v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            const totalMes = comissoesMesData.reduce((acc, c) => acc + c.valor_comissao, 0);
+            tfootTabelaMes.innerHTML = `
+                <tr class="bg-gray-700/80 font-bold text-white uppercase">
+                    <td colspan="5" class="p-3 text-right">Total do Mês</td>
+                    <td class="p-3 text-right">${formatCurrency(totalMes)}</td>
+                    <td colspan="2"></td>
+                </tr>
+            `;
+
+            // Tabela de Pendentes
+            corpoTabelaPendente.innerHTML = '';
+            comissoesPendentesData.forEach(c => {
+                const hoje = new Date();
+                hoje.setHours(0, 0, 0, 0);
+                const dataVencimento = new Date(c.data_vcto + "T00:00:00");
+                let statusInfo;
+                if (dataVencimento < hoje) {
+                    statusInfo = { text: 'Atrasada', class: 'bg-red-200 text-red-800' };
+                } else {
+                    statusInfo = { text: 'A vencer', class: 'bg-yellow-200 text-yellow-800' };
+                }
+
+                corpoTabelaPendente.innerHTML += `
+                    <tr class="hover:bg-gray-700">
+                        <td class="p-3">${new Date(c.data_vcto + 'T00:00:00').toLocaleDateString('pt-BR')}</td>
+                        <td class="p-3">${c.proposalNumber || 'N/A'}</td>
+                        <td class="p-3">${c.descricao}</td>
+                        <td class="p-3 text-right">${formatCurrency(c.valor_parcela)}</td>
+                        <td class="p-3 text-right">${c.comissao_media.toFixed(2)}%</td>
+                        <td class="p-3 text-right font-semibold text-yellow-400">${formatCurrency(c.valor_comissao)}</td>
+                        <td class="p-3 text-center">
+                            <button onclick="markAsReceived('${c.id}')" class="status-btn px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusInfo.class}">
+                                ${statusInfo.text}
+                            </button>
+                        </td>
+                        <td class="p-3 text-center">
+                            <button onclick="openDeleteModal('pendente', '${c.id}')" class="bg-red-600 hover:bg-red-700 text-white p-2 rounded-full text-xs">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-4v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            const totalPendente = comissoesPendentesData.reduce((acc, c) => acc + c.valor_comissao, 0);
+            tfootTabelaPendente.innerHTML = `
+                <tr class="bg-gray-700/80 font-bold text-white uppercase">
+                    <td colspan="5" class="p-3 text-right">Total Pendente</td>
+                    <td class="p-3 text-right">${formatCurrency(totalPendente)}</td>
+                    <td colspan="2"></td>
+                </tr>
+            `;
+            
+            updateSummary();
+            renderForecast();
+        }
+        
+        function updateSummary() {
+            const hoje = new Date();
+            hoje.setHours(0, 0, 0, 0);
+
+            const totalAtrasadas = comissoesPendentesData
+                .filter(c => new Date(c.data_vcto + "T00:00:00") < hoje)
+                .reduce((acc, c) => acc + c.valor_comissao, 0);
+            
+            const totalComissoesMes = comissoesMesData.reduce((acc, c) => acc + c.valor_comissao, 0);
+            const saldoFinal = totalAtrasadas + totalComissoesMes;
+
+            document.getElementById('comissoesAtrasadas').textContent = formatCurrency(totalAtrasadas);
+            document.getElementById('comissoesMes').textContent = formatCurrency(totalComissoesMes);
+            document.getElementById('saldoFinal').textContent = formatCurrency(saldoFinal);
+        }
+
+        function sortTable(tableId, column, asc = true) {
+            const table = document.getElementById(tableId);
+            const headers = table.querySelectorAll('th');
+            const dirModifier = asc ? 1 : -1;
+            const data = tableId === 'tabelaComissoesMes' ? comissoesMesData : comissoesPendentesData;
+            
+            headers.forEach(th => th.classList.remove('sort-asc', 'sort-desc'));
+            const header = Array.from(headers).find(h => h.dataset.sort === column);
+            header.classList.add(asc ? 'sort-asc' : 'sort-desc');
+
+            data.sort((a, b) => {
+                const key = column.startsWith('data') ? (column === 'data' ? 'data' : 'data_vcto') : column;
+                const valA = a[key];
+                const valB = b[key];
+                if (typeof valA === 'string' && typeof valB === 'string') {
+                    if (column.startsWith('data')) {
+                        return (new Date(valA) - new Date(valB)) * dirModifier;
+                    }
+                    return valA.localeCompare(valB) * dirModifier;
+                } else {
+                    return (valA - valB) * dirModifier;
+                }
+            });
+            renderTables();
+        }
+
+        // --- PDF PROCESSING & GENERATION ---
+        function generatePDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+
+            const headerText = document.getElementById('reportHeader').textContent;
+            const titleText = document.getElementById('currentMonthTableTitle').textContent;
+            const comissoesAtrasadasVal = document.getElementById('comissoesAtrasadas').textContent;
+            const comissoesMesVal = document.getElementById('comissoesMes').textContent;
+            const saldoFinalVal = document.getElementById('saldoFinal').textContent;
+            
+            doc.setFontSize(18);
+            doc.text("Relatório de Comissões", 14, 22);
+            doc.setFontSize(11);
+            doc.text(headerText, 14, 30);
+            
+            doc.setFontSize(12);
+            doc.text(`Comissões Atrasadas: ${comissoesAtrasadasVal}`, 14, 40);
+            doc.text(`Comissões do Mês: ${comissoesMesVal}`, 14, 46);
+            doc.text(`Saldo Final: ${saldoFinalVal}`, 14, 52);
+
+            const headMes = [['Data Vcto', 'Proposta', 'Descrição', 'Valor Parcela', 'Comissão']];
+            const bodyMes = comissoesMesData.map(c => [
+                new Date(c.data + 'T00:00:00').toLocaleDateString('pt-BR'),
+                c.proposalNumber || 'N/A',
+                c.descricao,
+                formatCurrency(c.valor_parcela),
+                formatCurrency(c.valor_comissao)
+            ]);
+
+            doc.autoTable({
+                head: headMes,
+                body: bodyMes,
+                startY: 60,
+                headStyles: { fillColor: [34, 41, 51] },
+                didDrawPage: (data) => {
+                    doc.setFontSize(14);
+                    doc.text(titleText, data.settings.margin.left, 58);
+                },
+            });
+
+            const headPendentes = [['Data Vcto', 'Proposta', 'Descrição', 'Valor Parcela', 'Comissão', 'Situação']];
+            const bodyPendentes = comissoesPendentesData.map(c => {
+                 const hoje = new Date();
+                hoje.setHours(0, 0, 0, 0);
+                const dataVencimento = new Date(c.data_vcto + "T00:00:00");
+                const situacao = dataVencimento < hoje ? 'Atrasada' : 'A vencer';
+                return [
+                    new Date(c.data_vcto + 'T00:00:00').toLocaleDateString('pt-BR'),
+                    c.proposalNumber || 'N/A',
+                    c.descricao,
+                    formatCurrency(c.valor_parcela),
+                    formatCurrency(c.valor_comissao),
+                    situacao
+                ]
+            });
+
+            doc.autoTable({
+                head: headPendentes,
+                body: bodyPendentes,
+                headStyles: { fillColor: [34, 41, 51] },
+                didDrawPage: (data) => {
+                    doc.setFontSize(14);
+                    doc.text("Comissões Pendentes", data.settings.margin.left, data.cursor.y - 10);
+                },
+            });
+
+            doc.save('Relatorio_Comissoes.pdf');
+        }
+
+        async function handlePdfUpload(event) {
+            const files = event.target.files;
+            if (!files.length) return;
+
+            const uploadLabel = document.getElementById('uploadButtonLabel');
+            uploadLabel.textContent = "Processando...";
+            uploadLabel.classList.add('animate-pulse');
+
+            for (const file of files) {
+                try {
+                    const pdfData = await new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = e => resolve(new Uint8Array(e.target.result));
+                        reader.onerror = err => reject(err);
+                        reader.readAsArrayBuffer(file);
+                    });
+
+                    const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
+                    let fullText = '';
+                    for (let i = 1; i <= pdf.numPages; i++) {
+                        const page = await pdf.getPage(i);
+                        const textContent = await page.getTextContent();
+                        fullText += textContent.items.map(item => item.str).join(' ');
+                    }
+                    
+                    parseCommissionData(fullText);
+
+                } catch (error) {
+                    console.error('Erro ao processar o PDF:', error);
+                    alert(`Não foi possível processar o arquivo "${file.name}". Verifique o formato do PDF.`);
+                }
+            }
+
+            uploadLabel.textContent = "Fazer Upload de PDF";
+            uploadLabel.classList.remove('animate-pulse');
+            event.target.value = ''; 
+            
+            saveData();
+            renderTables();
+        }
+        
+        function parseCommissionData(text) {
+             const clientRegex = /Para\s*([\s\S]*?)\s*CNPJ:/;
+             const proposalRegex = /(?:Proposta|Pedido) N(?:°|º)?\s*(\d+)/;
+             const installmentRegex = /(\d{2}\/\d{2}\/\d{4})\s*([\d.,]+)/g;
+
+            let clientMatch = text.replace(/\n/g, ' ').match(clientRegex);
+            let clientName = clientMatch ? clientMatch[1].trim().split('\n')[0] : "Cliente não identificado";
+            
+            let proposalMatch = text.match(proposalRegex);
+            let proposalNumber = proposalMatch ? proposalMatch[1] : "N/A";
+
+            const allInstallments = [...text.matchAll(installmentRegex)];
+            
+            if (allInstallments.length === 0) {
+                console.warn("Nenhuma parcela encontrada no PDF para:", clientName);
+                return;
+            }
+
+            allInstallments.forEach((match) => {
+                const dateStr = match[1];
+                const valueStr = match[2].replace(/\./g, '').replace(',', '.');
+                const value = parseFloat(valueStr);
+                
+                if (!dateStr || isNaN(value)) return;
+
+                const [day, month, year] = dateStr.split('/');
+                const isoDate = `${year}-${month}-${day}`;
+                const commissionValue = value * 0.05;
+
+                const newCommission = {
+                    id: crypto.randomUUID(),
+                    data: isoDate,
+                    data_vcto: isoDate,
+                    descricao: clientName,
+                    proposalNumber: proposalNumber,
+                    valor_parcela: value,
+                    comissao_media: 5.00,
+                    valor_comissao: commissionValue,
+                };
+                
+                const vctoDate = new Date(isoDate + "T00:00:00");
+                const hoje = new Date();
+                const mesAtual = hoje.getMonth();
+                const anoAtual = hoje.getFullYear();
+                
+                if (vctoDate.getMonth() === mesAtual && vctoDate.getFullYear() === anoAtual) {
+                    newCommission.status = 'Recebida';
+                    comissoesMesData.push(newCommission);
+                } else {
+                    newCommission.status = 'Pendente';
+                    comissoesPendentesData.push(newCommission);
+                }
+            });
+        }
+
+        // --- EVENT LISTENERS ---
+        document.getElementById('pdfUploadInput').addEventListener('change', handlePdfUpload);
+        document.getElementById('generatePdfBtn').addEventListener('click', generatePDF);
+        
+        document.querySelectorAll('.table-sortable th').forEach(headerCell => {
+            headerCell.addEventListener('click', () => {
+                const tableElement = headerCell.closest('table');
+                const column = headerCell.dataset.sort;
+                const currentIsAsc = !headerCell.classList.contains('sort-desc');
+                sortTable(tableElement.id, column, currentIsAsc);
+            });
+        });
+        
+        document.getElementById('cancelDeleteBtn').addEventListener('click', closeDeleteModal);
+        document.getElementById('confirmDeleteBtn').addEventListener('click', confirmDelete);
+
+        // --- INICIALIZAÇÃO ---
+        window.onload = () => {
+             loadData();
+             renderTables();
+        };
+    </script>
+</body>
+</html>
